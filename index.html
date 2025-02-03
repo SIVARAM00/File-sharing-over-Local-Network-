@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>File Sharing</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        text-align: center;
+      }
+      form {
+        margin-bottom: 20px;
+      }
+      input[type="file"] {
+        margin-bottom: 10px;
+      }
+      #progressContainer {
+        width: 100%;
+        max-width: 400px;
+        height: 20px;
+        background-color: #ddd;
+        margin: auto;
+        display: none;
+        border-radius: 5px;
+        overflow: hidden;
+        position: relative;
+      }
+      #progressBar {
+        height: 100%;
+        width: 0%;
+        background-color: #4caf50;
+        text-align: center;
+        color: white;
+        line-height: 20px;
+        transition: width 0.3s;
+      }
+      #cancelUpload {
+        display: none;
+        margin-top: 10px;
+        background-color: red;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        cursor: pointer;
+        border-radius: 3px;
+      }
+      table {
+        width: 100%;
+        max-width: 600px;
+        margin: auto;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+      }
+      th {
+        background-color: #f4f4f4;
+      }
+      .delete-btn {
+        background-color: red;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        cursor: pointer;
+        border-radius: 3px;
+      }
+      .delete-btn:hover {
+        background-color: darkred;
+      }
+      .disabled {
+        pointer-events: none;
+        opacity: 0.5;
+      }
+      @media (max-width: 600px) {
+        table,
+        th,
+        td {
+          font-size: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>File Sharing</h1>
+    <form id="uploadForm" enctype="multipart/form-data">
+      <input type="file" name="files" multiple required />
+      <button type="button" id="uploadBtn">Upload Files</button>
+      <button type="button" id="cancelUpload">Cancel</button>
+    </form>
+    <div id="progressContainer">
+      <div id="progressBar">0%</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>S.No</th>
+          <th>File Name</th>
+          <th>Size</th>
+          <th>Download</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="fileTable"></tbody>
+    </table>
+    <script>
+      let currentUpload = null;
+      const form = document.getElementById("uploadForm");
+      const uploadButton = document.getElementById("uploadBtn");
+      const cancelUploadButton = document.getElementById("cancelUpload");
+      const fileTableBody = document.getElementById("fileTable");
+      const progressContainer = document.getElementById("progressContainer");
+      const progressBar = document.getElementById("progressBar");
+
+      async function loadFiles() {
+        try {
+          const response = await fetch("/files");
+          const fileDetails = await response.json();
+          fileTableBody.innerHTML = "";
+
+          fileDetails.forEach((file, index) => {
+            const sizeInMB = (file.size / (1024 * 1024)).toFixed(2); // Convert bytes to MB
+            const row = document.createElement("tr");
+            row.innerHTML = `
+        <td>${index + 1}</td>
+        <td>${file.url.split("/").pop()}</td>
+        <td>${sizeInMB} MB</td>
+        <td><a href="${
+          file.url
+        }" target="_blank" class="download-link">Download</a></td>
+        <td>
+          <button class="delete-btn" onclick="confirmDelete('${file.url
+            .split("/")
+            .pop()}')">Delete</button>
+        </td>
+      `;
+            fileTableBody.appendChild(row);
+          });
+        } catch (error) {
+          console.error("Error loading files:", error);
+        }
+      }
+
+      function confirmDelete(fileName) {
+        const pin = prompt("Enter PIN to delete the file:");
+        if (!pin) {
+          alert("PIN is required to delete the file.");
+          return;
+        }
+
+        fetch(`/verify-pin`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin }),
+        })
+          .then((response) => {
+            if (response.ok) {
+              return fetch(`/delete?filename=${fileName}`, {
+                method: "DELETE",
+              });
+            } else {
+              throw new Error("Incorrect PIN.");
+            }
+          })
+          .then(() => loadFiles())
+          .catch((error) => alert(error.message));
+      }
+
+      uploadButton.addEventListener("click", () => {
+        const pin = prompt("Enter the PIN to upload files:");
+        if (!pin) {
+          alert("PIN is required to upload files.");
+          return;
+        }
+
+        fetch(`/verify-pin`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin }),
+        })
+          .then((response) => {
+            if (response.ok) {
+              const formData = new FormData(form);
+              const xhr = new XMLHttpRequest();
+              currentUpload = xhr;
+              xhr.open("POST", "/upload", true);
+
+              xhr.upload.addEventListener("progress", (e) => {
+                if (e.lengthComputable) {
+                  const percentComplete = Math.round(
+                    (e.loaded / e.total) * 100
+                  );
+                  progressBar.style.width = percentComplete + "%";
+                  progressBar.textContent = percentComplete + "%";
+                }
+              });
+
+              xhr.onload = () => {
+                progressContainer.style.display = "none";
+                cancelUploadButton.style.display = "none";
+                currentUpload = null;
+                loadFiles();
+              };
+
+              xhr.onerror = () => {
+                alert("An error occurred during the upload.");
+                progressContainer.style.display = "none";
+                cancelUploadButton.style.display = "none";
+              };
+
+              cancelUploadButton.addEventListener("click", () => {
+                if (currentUpload) {
+                  currentUpload.abort();
+                  alert("Upload canceled.");
+                }
+              });
+
+              progressContainer.style.display = "block";
+              progressBar.style.width = "0%";
+              progressBar.textContent = "0%";
+              cancelUploadButton.style.display = "inline-block";
+
+              xhr.send(formData);
+            } else {
+              alert("Incorrect PIN. Upload denied.");
+            }
+          })
+          .catch(() => alert("Verification failed. Please try again."));
+      });
+
+      loadFiles();
+    </script>
+  </body>
+</html>
