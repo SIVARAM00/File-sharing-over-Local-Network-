@@ -21,8 +21,8 @@ Ensure you have the following installed on your system:
 ### Steps to Install
 1. Clone the repository:
    ```sh
-   git clone https://github.com/yourusername/video-sharing.git
-   cd video-sharing
+   [git clone https://github.com/SIVARAM00/File-sharing-over-Local-Network-.git]
+   cd File-sharing-over-Local-Network-
    ```
 2. Install dependencies:
    ```sh
