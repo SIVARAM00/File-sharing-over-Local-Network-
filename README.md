@@ -36,6 +36,10 @@ Ensure you have the following installed on your system:
    ```
    http://localhost:5000
    ```
+   or
+   ```
+   http://{your_ip}:5000
+   ```
 
 ## Usage
 
